@@ -1,12 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import {
   LayoutDashboard, Briefcase, Users, ClipboardCheck,
-  Settings, Zap, ChevronRight
+  Settings, Zap, Plus, Trash2, ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getJD, resetSession } from "@/lib/api"
 
 const NAV = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -21,9 +23,26 @@ const BOTTOM_NAV = [
 
 export function Sidebar() {
   const path = usePathname()
+  const router = useRouter()
+  const [jdTitle, setJdTitle] = useState<string | null>(null)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const isActive = (href: string) =>
     href === "/" ? path === "/" : path.startsWith(href)
+
+  useEffect(() => {
+    getJD()
+      .then(r => setJdTitle(r.jd?.title ?? null))
+      .catch(() => {})
+  }, [path]) // re-fetch when route changes so it updates after JD is parsed
+
+  const handleReset = async () => {
+    if (!confirmReset) { setConfirmReset(true); return }
+    await resetSession().catch(() => {})
+    setJdTitle(null)
+    setConfirmReset(false)
+    router.push("/jobs")
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-[224px] bg-zinc-950 flex flex-col z-40 border-r border-zinc-800">
@@ -42,11 +61,39 @@ export function Sidebar() {
 
       {/* Active job pill */}
       <div className="px-3 py-3 border-b border-zinc-800/60">
-        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-zinc-900 cursor-pointer hover:bg-zinc-800 transition-colors group">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-          <span className="text-[11px] font-medium text-zinc-300 truncate flex-1">Sr. ML Engineer</span>
-          <ChevronRight className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
-        </div>
+        {jdTitle ? (
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/jobs"
+              className="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition-colors group"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-[11px] font-medium text-zinc-300 truncate flex-1">{jdTitle}</span>
+              <ChevronRight className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+            </Link>
+            <button
+              onClick={handleReset}
+              title={confirmReset ? "Click again to confirm" : "Delete job & reset session"}
+              className={cn(
+                "w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0",
+                confirmReset
+                  ? "bg-red-600 text-white"
+                  : "text-zinc-600 hover:text-red-400 hover:bg-zinc-800"
+              )}
+              onBlur={() => setConfirmReset(false)}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/jobs"
+            className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900 transition-colors group"
+          >
+            <Plus className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400" />
+            <span className="text-[11px] font-medium text-zinc-600 group-hover:text-zinc-400">New Job</span>
+          </Link>
+        )}
       </div>
 
       {/* Nav */}
