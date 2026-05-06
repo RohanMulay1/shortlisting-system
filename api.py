@@ -127,6 +127,7 @@ async def api_clear_candidates():
 
 @app.post("/api/pipeline/run")
 async def api_run_pipeline(req: PipelineRunRequest):
+    import traceback
     jd = state.load("jd_parsed")
     candidates = state.load("candidates", [])
     if not jd:
@@ -134,26 +135,29 @@ async def api_run_pipeline(req: PipelineRunRequest):
     if not candidates:
         raise HTTPException(status_code=400, detail="No resumes uploaded")
 
-    weights = req.weights or {"skill_match": 0.5, "skill_exp": 0.3, "total_exp": 0.15, "bonus": 0.05}
-    skill_scores = [compute_skill_score(jd, c, weights) for c in candidates]
-    rag_scores = compute_rag_scores(jd, candidates)
+    try:
+        weights = req.weights or {"skill_match": 0.5, "skill_exp": 0.3, "total_exp": 0.15, "bonus": 0.05}
+        skill_scores = [compute_skill_score(jd, c, weights) for c in candidates]
+        rag_scores = compute_rag_scores(jd, candidates)
 
-    hr_scores_map = state.load("hr_evaluations", {})
-    hr_scores = []
-    for c in candidates:
-        key = c.get("filename", c.get("name", ""))
-        ev = hr_scores_map.get(key, {})
-        hr_scores.append(ev.get("hr_score_normalized", 0.0))
+        hr_scores_map = state.load("hr_evaluations", {})
+        hr_scores = []
+        for c in candidates:
+            key = c.get("filename", c.get("name", ""))
+            ev = hr_scores_map.get(key, {})
+            hr_scores.append(ev.get("hr_score_normalized", 0.0))
 
-    final_weights = {"skill": 0.5, "rag": 0.3, "hr": 0.2}
-    ranked = rank_candidates(candidates, skill_scores, rag_scores, hr_scores, final_weights)
-    top = select_top_n(ranked, n=req.top_n, threshold=req.threshold)
+        final_weights = {"skill": 0.5, "rag": 0.3, "hr": 0.2}
+        ranked = rank_candidates(candidates, skill_scores, rag_scores, hr_scores, final_weights)
+        top = select_top_n(ranked, n=req.top_n, threshold=req.threshold)
 
-    state.save("skill_scores", skill_scores)
-    state.save("rag_scores", rag_scores)
-    state.save("ranked", ranked)
+        state.save("skill_scores", skill_scores)
+        state.save("rag_scores", rag_scores)
+        state.save("ranked", ranked)
 
-    return {"ranked": _safe_ranked(ranked), "top": _safe_ranked(top)}
+        return {"ranked": _safe_ranked(ranked), "top": _safe_ranked(top)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 
 @app.get("/api/ranked")
