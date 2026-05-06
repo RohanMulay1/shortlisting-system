@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, Briefcase, Users, ClipboardCheck,
-  Settings, Zap, ChevronRight
+  Settings, Zap, ChevronRight, GitBranch
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/jobs", icon: Briefcase, label: "Jobs" },
   { href: "/candidates", icon: Users, label: "Candidates" },
   { href: "/evaluation", icon: ClipboardCheck, label: "HR Evaluation" },
+  { href: "/workflow", icon: GitBranch, label: "Workflow" },
 ]
 
 const BOTTOM_NAV = [
