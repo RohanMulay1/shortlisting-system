@@ -1,6 +1,17 @@
-import numpy as np
-import faiss
+import os
+from pinecone import Pinecone
 from backend.openai_client import embed
+
+_pc: Pinecone | None = None
+_idx = None
+
+
+def _index():
+    global _pc, _idx
+    if _idx is None:
+        _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+        _idx = _pc.Index(os.environ["PINECONE_INDEX"])
+    return _idx
 
 
 def _candidate_to_text(candidate: dict) -> str:
@@ -26,8 +37,6 @@ def _jd_to_text(jd: dict) -> str:
         parts.append("Preferred: " + ", ".join(jd["preferred_skills"]))
     if jd.get("responsibilities"):
         parts.extend(jd["responsibilities"][:3])
-    if jd.get("domains"):
-        parts.append("Domain: " + ", ".join(jd["domains"]))
     return " | ".join(filter(None, parts))
 
 
@@ -38,15 +47,39 @@ def compute_rag_scores(jd: dict, candidates: list[dict]) -> list[float]:
     jd_text = _jd_to_text(jd)
     candidate_texts = [_candidate_to_text(c) for c in candidates]
 
-    all_texts = [jd_text] + candidate_texts
-    all_embeddings = embed(all_texts)
+    # Embed JD + all candidates in one batch call
+    all_embeddings = embed([jd_text] + candidate_texts)
+    jd_vec = all_embeddings[0]
+    cand_vecs = all_embeddings[1:]
 
-    jd_vec = np.array(all_embeddings[0], dtype="float32").reshape(1, -1)
-    candidate_vecs = np.array(all_embeddings[1:], dtype="float32")
+    # Upsert candidate embeddings to Pinecone (idempotent by filename ID)
+    vectors = [
+        {
+            "id": c["filename"],
+            "values": vec,
+            "metadata": {
+                "name": c.get("name", ""),
+                "email": c.get("email", ""),
+                "filename": c["filename"],
+                "total_years": float(c.get("total_years", 0)),
+            },
+        }
+        for c, vec in zip(candidates, cand_vecs)
+    ]
+    for i in range(0, len(vectors), 100):
+        _index().upsert(vectors=vectors[i : i + 100], namespace="resumes")
 
-    faiss.normalize_L2(jd_vec)
-    faiss.normalize_L2(candidate_vecs)
+    # Query Pinecone with JD vector — fetch scores for all candidates
+    results = _index().query(
+        vector=jd_vec,
+        top_k=len(candidates),
+        namespace="resumes",
+        include_values=False,
+    )
 
-    scores = (candidate_vecs @ jd_vec.T).flatten()
-    scores = np.clip(scores, 0, 1)
-    return [round(float(s), 3) for s in scores]
+    score_map = {m["id"]: m["score"] for m in results["matches"]}
+    return [round(score_map.get(c["filename"], 0.0), 3) for c in candidates]
+
+
+def delete_candidate(filename: str) -> None:
+    _index().delete(ids=[filename], namespace="resumes")
