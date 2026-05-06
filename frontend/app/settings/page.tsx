@@ -1,47 +1,78 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { CheckCircle2 } from "lucide-react"
+import { resetSession } from "@/lib/api"
+
 export default function SettingsPage() {
+  const [apiUrl, setApiUrl] = useState("http://localhost:8000")
+  const [saved, setSaved] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem("NEXT_PUBLIC_API_URL")
+    if (stored) setApiUrl(stored)
+  }, [])
+
+  const save = () => {
+    localStorage.setItem("NEXT_PUBLIC_API_URL", apiUrl)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleReset = async () => {
+    setResetting(true)
+    try {
+      await resetSession()
+      setResetDone(true)
+      setTimeout(() => setResetDone(false), 2000)
+    } catch {
+      // ignore
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
     <div className="p-8 max-w-3xl mx-auto animate-in">
       <div className="mb-8">
         <div className="text-xs text-zinc-400 font-medium mb-2">Settings</div>
         <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">Settings</h1>
-        <p className="text-sm text-zinc-500 mt-1">Configure scoring weights, API keys, and preferences.</p>
+        <p className="text-sm text-zinc-500 mt-1">Configure backend URL and scoring preferences.</p>
       </div>
 
       <div className="space-y-5">
-        {/* API */}
         <div className="bg-white border border-zinc-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-zinc-900 mb-4">API Configuration</h2>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">OpenAI API Key</label>
-              <input
-                type="password"
-                defaultValue="sk-proj-••••••••••••••••"
-                className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 font-mono"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">Backend API URL</label>
+              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
+                Backend API URL
+              </label>
               <input
                 type="text"
-                defaultValue="http://localhost:8000"
+                value={apiUrl}
+                onChange={e => setApiUrl(e.target.value)}
                 className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
               />
+              <p className="text-xs text-zinc-400 mt-1">
+                Stored in localStorage. Requires page refresh to take effect.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Scoring Weights */}
         <div className="bg-white border border-zinc-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-zinc-900 mb-4">Default Scoring Weights</h2>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: "Skill Match", key: "skill_match", default: 0.5 },
-              { label: "Skill Experience", key: "skill_exp", default: 0.3 },
-              { label: "Total Experience", key: "total_exp", default: 0.15 },
-              { label: "Bonus (Preferred)", key: "bonus", default: 0.05 },
+              { label: "Skill Match", default: 0.5 },
+              { label: "Skill Experience", default: 0.3 },
+              { label: "Total Experience", default: 0.15 },
+              { label: "Bonus (Preferred)", default: 0.05 },
             ].map(w => (
-              <div key={w.key}>
+              <div key={w.label}>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">{w.label}</label>
                   <span className="text-xs font-mono text-zinc-600">{w.default}</span>
@@ -50,10 +81,26 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+          <p className="text-xs text-zinc-400 mt-3">Weight customization applies on next pipeline run (pass via API).</p>
         </div>
 
-        <button className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors">
-          Save Settings
+        <div className="bg-white border border-zinc-200 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-zinc-900 mb-1">Reset Session</h2>
+          <p className="text-xs text-zinc-400 mb-4">Clears all candidates, scores, and evaluations from the backend.</p>
+          <button
+            onClick={handleReset}
+            disabled={resetting}
+            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+          >
+            {resetting ? "Resetting..." : resetDone ? "Done" : "Reset All Data"}
+          </button>
+        </div>
+
+        <button
+          onClick={save}
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          {saved ? <><CheckCircle2 className="w-4 h-4" /> Saved</> : "Save Settings"}
         </button>
       </div>
     </div>

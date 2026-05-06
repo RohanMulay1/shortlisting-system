@@ -1,6 +1,5 @@
 import json
-import io
-import pdfplumber
+import fitz  # PyMuPDF
 from backend.openai_client import chat
 
 _PARSE_SYSTEM = """You are an expert resume parser. Extract structured information and return ONLY valid JSON with this exact structure:
@@ -31,13 +30,8 @@ Rules:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    text_parts = []
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                text_parts.append(t)
-    return "\n".join(text_parts)
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    return "\n".join(page.get_text() for page in doc)
 
 
 def parse_resume(text: str, filename: str = "") -> dict:
