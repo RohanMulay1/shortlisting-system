@@ -1,16 +1,16 @@
 import os
-from pinecone import Pinecone
+import numpy as np
 from backend.openai_client import embed
 
-_pc: Pinecone | None = None
 _idx = None
 
 
 def _index():
-    global _pc, _idx
+    global _idx
     if _idx is None:
-        _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-        _idx = _pc.Index(os.environ["PINECONE_INDEX"])
+        from pinecone import Pinecone
+        pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+        _idx = pc.Index(os.environ["PINECONE_INDEX"])
     return _idx
 
 
@@ -40,6 +40,16 @@ def _jd_to_text(jd: dict) -> str:
     return " | ".join(filter(None, parts))
 
 
+def _cosine_fallback(jd_vec: list, cand_vecs: list) -> list[float]:
+    """Numpy cosine similarity — used when Pinecone is unavailable."""
+    jv = np.array(jd_vec, dtype="float32")
+    cv = np.array(cand_vecs, dtype="float32")
+    jv /= np.linalg.norm(jv) + 1e-10
+    cv /= np.linalg.norm(cv, axis=1, keepdims=True) + 1e-10
+    scores = cv @ jv
+    return [round(float(np.clip(s, 0, 1)), 3) for s in scores]
+
+
 def compute_rag_scores(jd: dict, candidates: list[dict]) -> list[float]:
     if not candidates:
         return []
@@ -47,39 +57,50 @@ def compute_rag_scores(jd: dict, candidates: list[dict]) -> list[float]:
     jd_text = _jd_to_text(jd)
     candidate_texts = [_candidate_to_text(c) for c in candidates]
 
-    # Embed JD + all candidates in one batch call
     all_embeddings = embed([jd_text] + candidate_texts)
     jd_vec = all_embeddings[0]
     cand_vecs = all_embeddings[1:]
 
-    # Upsert candidate embeddings to Pinecone (idempotent by filename ID)
-    vectors = [
-        {
-            "id": c["filename"],
-            "values": vec,
-            "metadata": {
-                "name": c.get("name", ""),
-                "email": c.get("email", ""),
-                "filename": c["filename"],
-                "total_years": float(c.get("total_years", 0)),
-            },
-        }
-        for c, vec in zip(candidates, cand_vecs)
-    ]
-    for i in range(0, len(vectors), 100):
-        _index().upsert(vectors=vectors[i : i + 100], namespace="resumes")
+    try:
+        idx = _index()
 
-    # Query Pinecone with JD vector — fetch scores for all candidates
-    results = _index().query(
-        vector=jd_vec,
-        top_k=len(candidates),
-        namespace="resumes",
-        include_values=False,
-    )
+        # Upsert candidate embeddings (idempotent — filename is the ID)
+        vectors = [
+            {
+                "id": c["filename"],
+                "values": vec,
+                "metadata": {
+                    "name": c.get("name", ""),
+                    "email": c.get("email", ""),
+                    "filename": c["filename"],
+                    "total_years": float(c.get("total_years", 0)),
+                },
+            }
+            for c, vec in zip(candidates, cand_vecs)
+        ]
+        for i in range(0, len(vectors), 100):
+            idx.upsert(vectors=vectors[i : i + 100], namespace="resumes")
 
-    score_map = {m["id"]: m["score"] for m in results["matches"]}
-    return [round(score_map.get(c["filename"], 0.0), 3) for c in candidates]
+        # Query with JD vector — Pinecone v3 returns attribute-based response
+        results = idx.query(
+            vector=jd_vec,
+            top_k=len(candidates),
+            namespace="resumes",
+            include_values=False,
+        )
+
+        # v3 SDK: results.matches is a list of ScoredVector objects with .id / .score
+        score_map = {m.id: m.score for m in results.matches}
+        return [round(float(np.clip(score_map.get(c["filename"], 0.0), 0, 1)), 3) for c in candidates]
+
+    except Exception as e:
+        # Pinecone unavailable or misconfigured — fall back to in-process cosine
+        print(f"[rag_engine] Pinecone error ({e}), falling back to numpy cosine")
+        return _cosine_fallback(jd_vec, cand_vecs)
 
 
 def delete_candidate(filename: str) -> None:
-    _index().delete(ids=[filename], namespace="resumes")
+    try:
+        _index().delete(ids=[filename], namespace="resumes")
+    except Exception:
+        pass
