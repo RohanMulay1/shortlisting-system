@@ -21,7 +21,8 @@ Rules:
 
 _SIMPLIFY_SYSTEM = """You are an HR communications specialist. Generate a concise, friendly simplified job description from the structured JD data provided.
 Include: Role summary, Key responsibilities (3-5 bullets), Must-have skills, Nice-to-have skills, Ideal candidate profile.
-Keep it under 300 words. Write in plain language a non-technical person can understand."""
+Keep it under 300 words. Write in plain language a non-technical person can understand.
+Do NOT use markdown formatting. No ** bold markers, no # headings, no bullet dashes — use plain text with section titles on their own lines."""
 
 
 def parse_jd(text: str) -> dict:
@@ -49,7 +50,12 @@ def parse_jd(text: str) -> dict:
 
 
 def generate_simplified_jd(parsed: dict) -> str:
-    return chat([
+    import re
+    text = chat([
         {"role": "system", "content": _SIMPLIFY_SYSTEM},
         {"role": "user", "content": f"Generate simplified JD from:\n{json.dumps(parsed, indent=2)}"},
     ])
+    # Strip any markdown bold/italic markers GPT adds despite instructions
+    text = re.sub(r'\*{1,3}(.*?)\*{1,3}', r'\1', text)
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+    return text
