@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { FileUploadZone } from "@/components/shared/FileUploadZone"
 import { Play, CheckCircle2, Sparkles, ChevronDown, ChevronUp, Briefcase, AlertCircle, AlertTriangle } from "lucide-react"
-import { parseJD, uploadResumes, runPipeline, getCandidates, type ParsedJD } from "@/lib/api"
+import { parseJD, getJD, uploadResumes, runPipeline, getCandidates, type ParsedJD } from "@/lib/api"
 
 interface UploadResult {
   added: number
@@ -28,11 +28,20 @@ export default function JobsPage() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Load already-uploaded filenames so FileUploadZone can flag duplicates
+  // Restore existing session state on mount so a page reload doesn't wipe the UI
   useEffect(() => {
+    getJD()
+      .then(r => {
+        if (r.jd) { setParsedJD(r.jd); setSimplified(r.simplified) }
+      })
+      .catch(() => {})
     getCandidates()
-      .then(r => setExistingFilenames(r.candidates.map(c => c.filename)))
-      .catch(() => {/* backend may not be running yet */})
+      .then(r => {
+        const names = r.candidates.map(c => c.filename)
+        setExistingFilenames(names)
+        if (names.length > 0) setUploadResult({ added: 0, skipped: 0, total: r.count })
+      })
+      .catch(() => {})
   }, [])
 
   const handleParseJD = async () => {
