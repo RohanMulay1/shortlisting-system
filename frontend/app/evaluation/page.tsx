@@ -5,12 +5,14 @@ import { ScoreRing } from "@/components/shared/ScoreRing"
 import { scoreColor } from "@/lib/utils"
 import {
   CheckCircle2, XCircle, ChevronLeft, ChevronRight,
-  MessageSquare, Sparkles, AlertCircle, Users, Mic, FileText, Zap
+  MessageSquare, Sparkles, AlertCircle, Users, Mic, FileText, Video, LogOut, RefreshCw
 } from "lucide-react"
 import Link from "next/link"
 import {
   getRanked, generateQualifier, evaluateQualifier, submitEvaluation,
-  finalizePipeline, type RankedCandidate, type QuestionResult
+  finalizePipeline, getMeetStatus, getMeetAuthUrl, getMeetMeetings,
+  fetchMeetTranscript, disconnectMeet,
+  type RankedCandidate, type QuestionResult, type MeetMeeting
 } from "@/lib/api"
 
 const VERDICT_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
@@ -34,6 +36,13 @@ export default function EvaluationPage() {
   const [evaluating, setEvaluating] = useState(false)
   const [aiResults, setAiResults] = useState<Record<string, QuestionResult[]>>({})
 
+  // Google Meet state
+  const [meetConnected, setMeetConnected] = useState(false)
+  const [meetMeetings, setMeetMeetings] = useState<MeetMeeting[]>([])
+  const [selectedMeeting, setSelectedMeeting] = useState<Record<string, string>>({})
+  const [loadingMeetings, setLoadingMeetings] = useState(false)
+  const [fetchingTranscript, setFetchingTranscript] = useState(false)
+
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [decisions, setDecisions] = useState<Record<string, "shortlisted" | "rejected" | null>>({})
   const [saving, setSaving] = useState(false)
@@ -44,6 +53,35 @@ export default function EvaluationPage() {
       .then(r => setCandidates(r.ranked.slice(0, 20)))
       .catch(() => setError("Could not load candidates — run the pipeline first"))
       .finally(() => setLoading(false))
+
+    // Check Google Meet connection status and handle OAuth callback
+    getMeetStatus().then(r => {
+      setMeetConnected(r.connected)
+      if (r.connected) {
+        setLoadingMeetings(true)
+        getMeetMeetings()
+          .then(m => setMeetMeetings(m.meetings))
+          .catch(() => {})
+          .finally(() => setLoadingMeetings(false))
+      }
+    }).catch(() => {})
+
+    // Handle OAuth redirect back with ?meet_connected=true or ?meet_error=...
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get("meet_connected") === "true") {
+        setMeetConnected(true)
+        setLoadingMeetings(true)
+        getMeetMeetings()
+          .then(m => setMeetMeetings(m.meetings))
+          .catch(() => {})
+          .finally(() => setLoadingMeetings(false))
+        window.history.replaceState({}, "", window.location.pathname)
+      } else if (params.get("meet_error")) {
+        setError(`Google Meet connection failed: ${params.get("meet_error")}`)
+        window.history.replaceState({}, "", window.location.pathname)
+      }
+    }
   }, [])
 
   const c = candidates[selectedIdx]
@@ -117,6 +155,40 @@ export default function EvaluationPage() {
       setError(e instanceof Error ? e.message : "Save failed")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleConnectMeet = async () => {
+    try {
+      const { url } = await getMeetAuthUrl()
+      window.location.href = url
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not start Google Meet connection")
+    }
+  }
+
+  const handleDisconnectMeet = async () => {
+    try {
+      await disconnectMeet()
+      setMeetConnected(false)
+      setMeetMeetings([])
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Disconnect failed")
+    }
+  }
+
+  const handleFetchTranscript = async (candidateFilename: string) => {
+    const meetingName = selectedMeeting[candidateFilename]
+    if (!meetingName) { setError("Select a meeting first."); return }
+    setError(null)
+    setFetchingTranscript(true)
+    try {
+      const res = await fetchMeetTranscript(meetingName, candidateFilename)
+      setAiResults(prev => ({ ...prev, [candidateFilename]: res.results }))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not fetch transcript")
+    } finally {
+      setFetchingTranscript(false)
     }
   }
 
@@ -241,49 +313,125 @@ export default function EvaluationPage() {
         {/* RIGHT */}
         <div className="lg:col-span-3 flex flex-col gap-4">
 
-          {/* Interview transcript input */}
+          {/* Interview Recording — Google Meet */}
           <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center gap-2">
-              <Mic className="w-4 h-4 text-zinc-400" />
-              <h3 className="text-sm font-semibold text-zinc-900">Interview Recording</h3>
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-zinc-400" />
+                <h3 className="text-sm font-semibold text-zinc-900">Interview Recording</h3>
+              </div>
+              {meetConnected && (
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    Google Meet connected
+                  </span>
+                  <button onClick={handleDisconnectMeet}
+                    className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-red-500 transition-colors px-2 py-1 rounded hover:bg-red-50">
+                    <LogOut className="w-3 h-3" />Disconnect
+                  </button>
+                </div>
+              )}
             </div>
             <div className="p-5 flex flex-col gap-3">
-              {/* Fireflies placeholder */}
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50">
-                <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-                  <Zap className="w-4 h-4 text-violet-600" />
+              {!meetConnected ? (
+                /* Not connected — show connect button */
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <Video className="w-6 h-6 text-blue-500" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-semibold text-zinc-800">Connect Google Meet</div>
+                    <div className="text-[11px] text-zinc-400 mt-1 max-w-xs">
+                      Automatically fetch interview transcripts from your Google Meet recordings
+                    </div>
+                  </div>
+                  <button onClick={handleConnectMeet}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <Video className="w-4 h-4" />Connect Google Meet
+                  </button>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="flex-1 h-px bg-zinc-200" />
+                    <span className="text-[11px] text-zinc-400 font-medium">or paste transcript manually</span>
+                    <div className="flex-1 h-px bg-zinc-200" />
+                  </div>
+                  <textarea
+                    value={transcripts[fn] ?? ""}
+                    onChange={e => setTranscripts(t => ({ ...t, [fn]: e.target.value }))}
+                    placeholder={"Paste interview transcript here...\n\nExample:\nInterviewer: Can you walk us through your ML experience?\nCandidate: Sure, I have 5 years working with PyTorch..."}
+                    className="w-full h-28 text-xs text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 placeholder:text-zinc-400 font-mono"
+                  />
+                  <button onClick={handleEvaluate} disabled={evaluating || !transcripts[fn]?.trim()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
+                    {evaluating ? <><Spinner />Analysing answers...</> : <><FileText className="w-4 h-4" />Evaluate Transcript</>}
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-zinc-700">Connect Fireflies.ai</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">Auto-import transcripts when your API key is configured</div>
+              ) : (
+                /* Connected — show meeting picker */
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Select Meeting</div>
+                    <button onClick={() => {
+                      setLoadingMeetings(true)
+                      getMeetMeetings().then(m => setMeetMeetings(m.meetings)).catch(() => {}).finally(() => setLoadingMeetings(false))
+                    }} className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-600 transition-colors">
+                      <RefreshCw className={`w-3 h-3 ${loadingMeetings ? "animate-spin" : ""}`} />Refresh
+                    </button>
+                  </div>
+                  {loadingMeetings ? (
+                    <div className="flex items-center gap-2 py-4 justify-center text-zinc-400">
+                      <Spinner />
+                      <span className="text-sm">Loading meetings...</span>
+                    </div>
+                  ) : meetMeetings.length === 0 ? (
+                    <div className="text-center py-6 text-zinc-400">
+                      <Mic className="w-6 h-6 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">No recent meetings found</p>
+                      <p className="text-[11px] mt-1 text-zinc-300">Make sure transcription was enabled in your meeting</p>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedMeeting[fn] ?? ""}
+                        onChange={e => setSelectedMeeting(s => ({ ...s, [fn]: e.target.value }))}
+                        className="w-full text-sm text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                      >
+                        <option value="">— Select a meeting —</option>
+                        {meetMeetings.map(m => (
+                          <option key={m.name} value={m.name}>
+                            {m.title} {m.start_time ? `(${m.start_time.slice(0, 10)})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleFetchTranscript(fn)}
+                        disabled={fetchingTranscript || !selectedMeeting[fn]}
+                        className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                      >
+                        {fetchingTranscript
+                          ? <><Spinner />Fetching &amp; evaluating...</>
+                          : <><Sparkles className="w-4 h-4" />Fetch Transcript &amp; Evaluate</>
+                        }
+                      </button>
+                    </>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-zinc-200" />
+                    <span className="text-[11px] text-zinc-400 font-medium">or paste manually</span>
+                    <div className="flex-1 h-px bg-zinc-200" />
+                  </div>
+                  <textarea
+                    value={transcripts[fn] ?? ""}
+                    onChange={e => setTranscripts(t => ({ ...t, [fn]: e.target.value }))}
+                    placeholder="Paste interview transcript here..."
+                    className="w-full h-24 text-xs text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 placeholder:text-zinc-400 font-mono"
+                  />
+                  <button onClick={handleEvaluate} disabled={evaluating || !transcripts[fn]?.trim()}
+                    className="flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
+                    {evaluating ? <><Spinner />Analysing...</> : <><FileText className="w-4 h-4" />Evaluate Pasted Transcript</>}
+                  </button>
                 </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500 shrink-0">Coming soon</span>
-              </div>
-
-              <div className="flex items-center gap-2 text-zinc-300">
-                <div className="flex-1 h-px bg-zinc-200" />
-                <span className="text-[11px] text-zinc-400 font-medium">or paste transcript</span>
-                <div className="flex-1 h-px bg-zinc-200" />
-              </div>
-
-              <textarea
-                value={transcripts[fn] ?? ""}
-                onChange={e => setTranscripts(t => ({ ...t, [fn]: e.target.value }))}
-                placeholder={"Paste the Fireflies transcript here...\n\nExample:\nInterviewer: Can you walk us through your ML experience?\nCandidate: Sure, I have 5 years working with PyTorch..."}
-                className="w-full h-32 text-xs text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 placeholder:text-zinc-400 font-mono"
-              />
-
-              <button
-                onClick={handleEvaluate}
-                disabled={evaluating || !transcripts[fn]?.trim()}
-                className="flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                {evaluating ? (
-                  <><Spinner />Analysing answers...</>
-                ) : (
-                  <><FileText className="w-4 h-4" />Auto-Evaluate Answers</>
-                )}
-              </button>
+              )}
             </div>
           </div>
 
