@@ -144,7 +144,6 @@ export function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[11px] font-medium text-zinc-300 truncate">HR Manager</div>
-            <div className="text-[10px] text-zinc-600 truncate">rohanm1307@gmail.com</div>
           </div>
         </div>
       </div>
