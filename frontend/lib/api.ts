@@ -169,6 +169,22 @@ export async function generateQualifier(candidate_filename: string): Promise<{ q
   })
 }
 
+export interface QuestionResult {
+  verdict: "Strong" | "Good" | "Weak" | "Not Addressed"
+  summary: string
+  score: number
+}
+
+export async function evaluateQualifier(
+  candidate_filename: string,
+  transcript: string
+): Promise<{ results: QuestionResult[]; avg_score: number }> {
+  return request("/api/qualifier/evaluate", {
+    method: "POST",
+    body: JSON.stringify({ candidate_filename, transcript }),
+  }, 120000)
+}
+
 export async function submitEvaluation(data: {
   candidate_filename: string
   ratings: number[]

@@ -12,7 +12,7 @@ from backend.resume_parser import extract_text_from_pdf, parse_resume
 from backend.scorer import compute_skill_score
 from backend.rag_engine import compute_rag_scores
 from backend.ranker import rank_candidates, select_top_n
-from backend.qualifier import generate_questions
+from backend.qualifier import generate_questions, evaluate_answers
 from backend import state
 
 state.init_db()
@@ -42,6 +42,10 @@ class PipelineRunRequest(BaseModel):
 
 class QualifierRequest(BaseModel):
     candidate_filename: str
+
+class QualifierEvaluateRequest(BaseModel):
+    candidate_filename: str
+    transcript: str  # raw text or Fireflies JSON stringified — placeholder until webhook is wired
 
 class EvaluationSubmitRequest(BaseModel):
     candidate_filename: str
@@ -237,6 +241,42 @@ async def api_generate_qualifier(req: QualifierRequest):
     cache[req.candidate_filename] = questions
     state.save("qualifier_questions", cache)
     return {"questions": questions}
+
+
+@app.post("/api/qualifier/evaluate")
+async def api_evaluate_qualifier(req: QualifierEvaluateRequest):
+    """Evaluate a candidate's interview answers against their qualifier questions.
+
+    Accepts plain transcript text or a Fireflies JSON string.
+    Placeholder: Fireflies webhook will POST directly to this endpoint once wired.
+    """
+    cache = state.load("qualifier_questions", {})
+    questions = cache.get(req.candidate_filename)
+    if not questions:
+        raise HTTPException(status_code=400, detail="Generate qualifier questions first")
+
+    # If transcript looks like JSON (Fireflies payload), parse it
+    transcript_payload = req.transcript
+    try:
+        transcript_payload = __import__("json").loads(req.transcript)
+    except Exception:
+        pass  # treat as plain text
+
+    results = evaluate_answers(questions, transcript_payload)
+
+    # Persist scores so finalize_pipeline can pick them up
+    hr_evals = state.load("hr_evaluations", {})
+    scores = [r["score"] for r in results]
+    avg = sum(scores) / len(scores) if scores else 0
+    existing = hr_evals.get(req.candidate_filename, {})
+    hr_evals[req.candidate_filename] = {
+        **existing,
+        "ai_evaluation": results,
+        "avg_rating": avg,
+        "hr_score_normalized": round(avg / 10, 3),
+    }
+    state.save("hr_evaluations", hr_evals)
+    return {"results": results, "avg_score": round(avg, 2)}
 
 
 # ── Evaluation ────────────────────────────────────────────────────────────────
