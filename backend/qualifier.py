@@ -64,9 +64,20 @@ def generate_questions(jd: dict, candidate: dict) -> list[str]:
 
 
 def extract_transcript_text(payload) -> str:
-    """Accept raw string or Fireflies JSON and return plain transcript text."""
+    """Accept raw string, Fireflies JSON, or Google Meet transcript entries list."""
     if isinstance(payload, str):
         return payload
+
+    # Google Meet API: list of transcript entry dicts with "text" key
+    if isinstance(payload, list):
+        lines = []
+        for entry in payload:
+            text = entry.get("text", "").strip()
+            if text:
+                speaker = entry.get("speaker", "Participant")
+                lines.append(f"{speaker}: {text}")
+        return "\n".join(lines)
+
     if isinstance(payload, dict):
         # Fireflies v2 webhook / API response shape
         sentences = payload.get("sentences") or []
@@ -80,6 +91,7 @@ def extract_transcript_text(payload) -> str:
             or payload.get("summary", {}).get("overview", "")
             or ""
         )
+
     return str(payload)
 
 

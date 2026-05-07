@@ -203,3 +203,37 @@ export async function getEvaluations(): Promise<{ evaluations: Record<string, un
 export async function resetSession(): Promise<void> {
   return request("/api/session/reset", { method: "DELETE" })
 }
+
+// ── Google Meet integration ───────────────────────────────────────────────────
+
+export interface MeetMeeting {
+  name: string        // "conferenceRecords/abc123"
+  title: string
+  start_time: string
+}
+
+export async function getMeetStatus(): Promise<{ connected: boolean }> {
+  return request("/api/integrations/google-meet/status")
+}
+
+export async function getMeetAuthUrl(): Promise<{ url: string }> {
+  return request("/api/integrations/google-meet/auth-url")
+}
+
+export async function getMeetMeetings(): Promise<{ meetings: MeetMeeting[] }> {
+  return request("/api/integrations/google-meet/meetings")
+}
+
+export async function fetchMeetTranscript(
+  conference_record_name: string,
+  candidate_filename: string
+): Promise<{ results: QuestionResult[]; avg_score: number; transcript: string }> {
+  return request("/api/integrations/google-meet/fetch-transcript", {
+    method: "POST",
+    body: JSON.stringify({ conference_record_name, candidate_filename }),
+  }, 60000)
+}
+
+export async function disconnectMeet(): Promise<void> {
+  return request("/api/integrations/google-meet/disconnect", { method: "DELETE" })
+}

@@ -14,6 +14,7 @@ from backend.rag_engine import compute_rag_scores
 from backend.ranker import rank_candidates, select_top_n
 from backend.qualifier import generate_questions, evaluate_answers
 from backend import state
+from fastapi.responses import RedirectResponse
 
 state.init_db()
 
@@ -311,6 +312,104 @@ async def api_reset():
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "1.0.0"}
+
+
+# ── Google Meet integration ───────────────────────────────────────────────────
+
+def _meet_redirect_uri() -> str:
+    backend = os.getenv("RENDER_EXTERNAL_URL", "https://shortlisting-system.onrender.com")
+    return f"{backend}/api/integrations/google-meet/callback"
+
+def _frontend_url() -> str:
+    return os.getenv("FRONTEND_URL", "https://shortlisting-system.vercel.app")
+
+
+@app.get("/api/integrations/google-meet/status")
+async def meet_status():
+    tokens = state.load("google_meet_tokens")
+    return {"connected": tokens is not None}
+
+
+@app.get("/api/integrations/google-meet/auth-url")
+async def meet_auth_url():
+    if not os.getenv("GOOGLE_CLIENT_ID"):
+        raise HTTPException(status_code=503, detail="Google Meet integration not configured — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to Render env vars")
+    from backend.google_meet import get_auth_url
+    url = get_auth_url(_meet_redirect_uri())
+    return {"url": url}
+
+
+@app.get("/api/integrations/google-meet/callback")
+async def meet_callback(code: str = "", error: str = ""):
+    frontend = _frontend_url()
+    if error or not code:
+        return RedirectResponse(f"{frontend}/evaluation?meet_error=access_denied")
+    try:
+        from backend.google_meet import exchange_code
+        tokens = exchange_code(code, _meet_redirect_uri())
+        state.save("google_meet_tokens", tokens)
+        return RedirectResponse(f"{frontend}/evaluation?meet_connected=true")
+    except Exception as e:
+        return RedirectResponse(f"{frontend}/evaluation?meet_error=auth_failed")
+
+
+@app.get("/api/integrations/google-meet/meetings")
+async def meet_list_meetings():
+    tokens = state.load("google_meet_tokens")
+    if not tokens:
+        raise HTTPException(status_code=401, detail="Google Meet not connected")
+    try:
+        from backend.google_meet import list_meetings
+        return {"meetings": list_meetings(tokens)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Google Meet API error: {e}")
+
+
+class MeetTranscriptRequest(BaseModel):
+    conference_record_name: str  # e.g. "conferenceRecords/abc123"
+    candidate_filename: str
+
+
+@app.post("/api/integrations/google-meet/fetch-transcript")
+async def meet_fetch_transcript(req: MeetTranscriptRequest):
+    tokens = state.load("google_meet_tokens")
+    if not tokens:
+        raise HTTPException(status_code=401, detail="Google Meet not connected")
+
+    cache = state.load("qualifier_questions", {})
+    questions = cache.get(req.candidate_filename)
+    if not questions:
+        raise HTTPException(status_code=400, detail="Generate qualifier questions first")
+
+    try:
+        from backend.google_meet import get_transcript_text
+        transcript = get_transcript_text(tokens, req.conference_record_name)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch transcript: {e}")
+
+    if not transcript.strip():
+        raise HTTPException(status_code=404, detail="No transcript found for this meeting. Make sure transcription was enabled.")
+
+    results = evaluate_answers(questions, transcript)
+
+    hr_evals = state.load("hr_evaluations", {})
+    scores = [r["score"] for r in results]
+    avg = sum(scores) / len(scores) if scores else 0
+    existing = hr_evals.get(req.candidate_filename, {})
+    hr_evals[req.candidate_filename] = {
+        **existing,
+        "ai_evaluation": results,
+        "avg_rating": avg,
+        "hr_score_normalized": round(avg / 10, 3),
+    }
+    state.save("hr_evaluations", hr_evals)
+    return {"results": results, "avg_score": round(avg, 2), "transcript": transcript}
+
+
+@app.delete("/api/integrations/google-meet/disconnect")
+async def meet_disconnect():
+    state.save("google_meet_tokens", None)
+    return {"ok": True}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
