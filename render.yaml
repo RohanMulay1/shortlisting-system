@@ -10,7 +10,7 @@ services:
       - key: PINECONE_API_KEY
         sync: false
       - key: PINECONE_INDEX
-        value: quickstart
+        value: shortlist-resumes
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
