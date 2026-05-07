@@ -46,45 +46,8 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-[224px] bg-zinc-950 flex flex-col z-40 border-r border-zinc-800">
-      {/* Active job pill */}
-      <div className="px-3 py-3 border-b border-zinc-800/60">
-        {jdTitle ? (
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/jobs"
-              className="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition-colors group"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-[11px] font-medium text-zinc-300 truncate flex-1">{jdTitle}</span>
-              <ChevronRight className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
-            </Link>
-            <button
-              onClick={handleReset}
-              title={confirmReset ? "Click again to confirm" : "Delete job & reset session"}
-              className={cn(
-                "w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0",
-                confirmReset
-                  ? "bg-red-600 text-white"
-                  : "text-zinc-600 hover:text-red-400 hover:bg-zinc-800"
-              )}
-              onBlur={() => setConfirmReset(false)}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
-          <Link
-            href="/jobs"
-            className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900 transition-colors group"
-          >
-            <Plus className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400" />
-            <span className="text-[11px] font-medium text-zinc-600 group-hover:text-zinc-400">New Job</span>
-          </Link>
-        )}
-      </div>
-
       {/* Nav */}
-      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         <div className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest px-2 mb-2">Navigation</div>
         {NAV.map(({ href, icon: Icon, label }) => (
           <Link
@@ -108,6 +71,43 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="px-3 pb-4 space-y-0.5 border-t border-zinc-800/60 pt-3">
+        {/* Active job pill */}
+        <div className="mb-2">
+          {jdTitle ? (
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/jobs"
+                className="flex items-center gap-2 flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition-colors group"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-[11px] font-medium text-zinc-300 truncate flex-1">{jdTitle}</span>
+                <ChevronRight className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+              </Link>
+              <button
+                onClick={handleReset}
+                title={confirmReset ? "Click again to confirm" : "Delete job & reset session"}
+                className={cn(
+                  "w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0",
+                  confirmReset
+                    ? "bg-red-600 text-white"
+                    : "text-zinc-600 hover:text-red-400 hover:bg-zinc-800"
+                )}
+                onBlur={() => setConfirmReset(false)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/jobs"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-dashed border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900 transition-colors group"
+            >
+              <Plus className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400" />
+              <span className="text-[11px] font-medium text-zinc-600 group-hover:text-zinc-400">New Job</span>
+            </Link>
+          )}
+        </div>
+
         {BOTTOM_NAV.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
@@ -123,7 +123,6 @@ export function Sidebar() {
             {label}
           </Link>
         ))}
-
       </div>
     </aside>
   )
