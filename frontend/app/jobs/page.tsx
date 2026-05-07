@@ -204,33 +204,47 @@ export default function JobsPage() {
                 </div>
               )}
 
-              <button
-                onClick={handleUploadResumes}
-                disabled={uploading || resumeFiles.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                {uploading ? (
-                  <><Spinner />Uploading...</>
-                ) : (
-                  `Upload ${resumeFiles.length > 0 ? `${resumeFiles.length} File${resumeFiles.length !== 1 ? "s" : ""}` : "Resumes"}`
+              <div className="flex flex-col gap-1.5">
+                <button
+                  onClick={handleUploadResumes}
+                  disabled={uploading || resumeFiles.length === 0}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  {uploading ? (
+                    <><Spinner />Parsing resumes...</>
+                  ) : (
+                    `Upload ${resumeFiles.length > 0 ? `${resumeFiles.length} File${resumeFiles.length !== 1 ? "s" : ""}` : "Resumes"}`
+                  )}
+                </button>
+                {uploading && (
+                  <p className="text-xs text-center text-zinc-400">
+                    Each resume is parsed by AI — allow ~2s per file
+                  </p>
                 )}
-              </button>
+              </div>
             </div>
           </div>
 
           {/* Run Pipeline */}
           {canRun && (
-            <button
-              onClick={handleRunPipeline}
-              disabled={running}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white disabled:opacity-70"
-            >
-              {running ? (
-                <><Spinner />Running pipeline...</>
-              ) : (
-                <><Play className="w-4 h-4" />Run Candidate Match & Rank</>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleRunPipeline}
+                disabled={running}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white disabled:opacity-70"
+              >
+                {running ? (
+                  <><Spinner />Running pipeline...</>
+                ) : (
+                  <><Play className="w-4 h-4" />Run Candidate Match & Rank</>
+                )}
+              </button>
+              {running && (
+                <p className="text-xs text-center text-zinc-400">
+                  Scoring resumes and computing matches — this takes 10–30 seconds
+                </p>
               )}
-            </button>
+            </div>
           )}
         </div>
 

@@ -21,6 +21,7 @@ export default function EvaluationPage() {
   const [decisions, setDecisions] = useState<Record<string, "shortlisted" | "rejected" | null>>({})
   const [saving, setSaving] = useState(false)
   const [saveDone, setSaveDone] = useState<string | null>(null)
+  const [questionError, setQuestionError] = useState<string | null>(null)
 
   useEffect(() => {
     getRanked()
@@ -34,11 +35,15 @@ export default function EvaluationPage() {
   useEffect(() => {
     if (!c) return
     const fn = c.candidate.filename
-    if (questions[fn]) return
+    if (questions[fn] !== undefined) return
     setLoadingQ(true)
+    setQuestionError(null)
     generateQualifier(fn)
       .then(res => setQuestions(prev => ({ ...prev, [fn]: res.questions })))
-      .catch(() => setQuestions(prev => ({ ...prev, [fn]: [] })))
+      .catch((e: unknown) => {
+        setQuestions(prev => ({ ...prev, [fn]: [] }))
+        setQuestionError(e instanceof Error ? e.message : "Could not load qualifier questions. You can still rate and save manually.")
+      })
       .finally(() => setLoadingQ(false))
   }, [selectedIdx, candidates]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -251,8 +256,9 @@ export default function EvaluationPage() {
                 </div>
               ) : cQuestions.length === 0 ? (
                 <div className="flex flex-col items-center py-8 text-zinc-400">
-                  <Sparkles className="w-6 h-6 mb-2 opacity-50" />
-                  <p className="text-sm">No questions generated</p>
+                  <AlertCircle className="w-6 h-6 mb-2 opacity-50" />
+                  <p className="text-sm">{questionError ?? "No questions generated"}</p>
+                  <p className="text-xs mt-1 text-center max-w-xs">{questionError ? "You can still fill in ratings and notes below." : ""}</p>
                 </div>
               ) : (
                 cQuestions.map((q, qi) => (

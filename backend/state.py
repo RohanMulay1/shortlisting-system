@@ -30,4 +30,13 @@ def load(key: str, default=None):
 
 
 def clear_all() -> None:
+    # Delete Pinecone vectors for all candidates before wiping Supabase state
+    try:
+        candidates = load("candidates", [])
+        if candidates:
+            from backend.rag_engine import delete_candidate
+            for c in candidates:
+                delete_candidate(c.get("filename", ""))
+    except Exception:
+        pass
     _get_client().table("app_state").delete().neq("key", "").execute()
