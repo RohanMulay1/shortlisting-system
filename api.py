@@ -322,9 +322,12 @@ async def debug_pinecone():
     try:
         from pinecone import Pinecone
         pc = Pinecone(api_key=key)
+        existing = [i.name for i in pc.list_indexes()]
+        if index_name not in existing:
+            return {"ok": False, "index": index_name, "existing_indexes": existing, "error": "index not found in this project", "key_prefix": key[:12]}
         idx = pc.Index(index_name)
         stats = idx.describe_index_stats()
-        return {"ok": True, "index": index_name, "total_vectors": stats.total_vector_count, "key_prefix": key[:12]}
+        return {"ok": True, "index": index_name, "total_vectors": stats.total_vector_count, "existing_indexes": existing, "key_prefix": key[:12]}
     except Exception as e:
         return {"ok": False, "index": index_name, "error": str(e), "key_prefix": key[:12]}
 
