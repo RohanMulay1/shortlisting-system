@@ -8,9 +8,30 @@ _idx = None
 def _index():
     global _idx
     if _idx is None:
-        from pinecone import Pinecone
+        from pinecone import Pinecone, ServerlessSpec
         pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-        _idx = pc.Index(os.environ["PINECONE_INDEX"])
+        name = os.environ["PINECONE_INDEX"]
+        existing = {i.name: i for i in pc.list_indexes()}
+        if name not in existing:
+            pc.create_index(
+                name=name,
+                dimension=1536,
+                metric="cosine",
+                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+            )
+        else:
+            # If index exists but has wrong dimension, use a suffixed name
+            idx_info = existing[name]
+            if getattr(idx_info, "dimension", 1536) != 1536:
+                name = f"{name}-1536"
+                if name not in existing:
+                    pc.create_index(
+                        name=name,
+                        dimension=1536,
+                        metric="cosine",
+                        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                    )
+        _idx = pc.Index(name)
     return _idx
 
 
