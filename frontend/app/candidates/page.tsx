@@ -4,11 +4,13 @@ import { useState, useEffect } from "react"
 import { ScoreRing } from "@/components/shared/ScoreRing"
 import { ScoreBar } from "@/components/shared/ScoreBar"
 import { scoreColor } from "@/lib/utils"
-import { SlidersHorizontal, ChevronDown, ChevronUp, Users, ArrowRight, AlertCircle } from "lucide-react"
+import { SlidersHorizontal, ChevronDown, ChevronUp, ChevronsUpDown, Users, ArrowRight, AlertCircle, Download, AlertTriangle } from "lucide-react"
 import Link from "next/link"
-import { getRanked, type RankedCandidate } from "@/lib/api"
+import { getRanked, getShortlist, type RankedCandidate } from "@/lib/api"
 
-const STATUS_FILTERS = ["all", "shortlisted", "reviewing", "pending", "rejected"] as const
+const STATUS_FILTERS = ["all", "shortlisted", "pending", "rejected"] as const
+
+type SortCol = "final" | "skill" | "rag" | "hr"
 
 export default function CandidatesPage() {
   const [ranked, setRanked] = useState<RankedCandidate[]>([])
@@ -19,18 +21,55 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [sortCol, setSortCol] = useState<SortCol>("final")
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc")
+  const [stale, setStale] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     getRanked()
-      .then(r => setRanked(r.ranked))
+      .then(r => {
+        setRanked(r.ranked)
+        const lastRun = parseInt(localStorage.getItem("lastPipelineRun") ?? "0")
+        const lastUp = parseInt(localStorage.getItem("lastUpload") ?? "0")
+        if (lastUp > lastRun && r.ranked.length > 0) setStale(true)
+      })
       .catch(() => setError("Could not load candidates"))
       .finally(() => setLoading(false))
   }, [])
 
+  const scoreFor = (r: RankedCandidate, col: SortCol) =>
+    col === "final" ? r.final_score : col === "skill" ? r.skill_score : col === "rag" ? r.rag_score : r.hr_score
+
   const filtered = ranked
     .filter(r => statusFilter === "all" || r.status === statusFilter)
     .filter(r => Math.round(r.final_score * 100) >= threshold)
+    .sort((a, b) => sortDir === "desc" ? scoreFor(b, sortCol) - scoreFor(a, sortCol) : scoreFor(a, sortCol) - scoreFor(b, sortCol))
     .slice(0, topN)
+
+  const toggleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => d === "desc" ? "asc" : "desc")
+    else { setSortCol(col); setSortDir("desc") }
+  }
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const { shortlist } = await getShortlist()
+      const headers = ["Rank", "Name", "Email", "Years", "Final%", "Skill%", "RAG%", "HR%", "Matched Required", "Status", "Notes"]
+      const rows = shortlist.map(r => [
+        r.rank, r.name, r.email, r.total_years,
+        Math.round(r.final_score * 100), Math.round(r.skill_score * 100),
+        Math.round(r.rag_score * 100), Math.round(r.hr_score * 100),
+        r.matched_required, r.status, r.hr_notes,
+      ])
+      const csv = [headers, ...rows].map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n")
+      const blob = new Blob([csv], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a"); a.href = url; a.download = "shortlist.csv"; a.click()
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ } finally { setExporting(false) }
+  }
 
   const toggle = (filename: string) => setExpanded(prev => prev === filename ? null : filename)
 
@@ -45,20 +84,31 @@ export default function CandidatesPage() {
               {loading ? "Loading..." : `Showing ${filtered.length} candidates — Final = (Skill × 0.5) + (RAG × 0.3) + (HR × 0.2)`}
             </p>
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            Filters
-            {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExport} disabled={exporting || ranked.length === 0}
+              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 transition-colors">
+              <Download className="w-4 h-4" />{exporting ? "Exporting..." : "Export CSV"}
+            </button>
+            <button onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+              <SlidersHorizontal className="w-4 h-4" />Filters
+              {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
         <div className="mb-5 flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
           <AlertCircle className="w-4 h-4 shrink-0" />{error}
+        </div>
+      )}
+
+      {stale && (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Resumes were uploaded after the last pipeline run — scores may be outdated.</span>
+          <Link href="/jobs" className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">Re-run pipeline →</Link>
         </div>
       )}
 
@@ -80,12 +130,14 @@ export default function CandidatesPage() {
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Top N</label>
-            <input type="range" min={1} max={Math.max(ranked.length, 1)} value={topN}
-              onChange={e => setTopN(+e.target.value)} className="w-32 accent-indigo-600" />
-            <span className="text-xs text-zinc-500 font-mono">Top {topN}</span>
-          </div>
+          {ranked.length > 10 && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Top N</label>
+              <input type="range" min={1} max={Math.max(ranked.length, 1)} value={topN}
+                onChange={e => setTopN(+e.target.value)} className="w-32 accent-indigo-600" />
+              <span className="text-xs text-zinc-500 font-mono">Top {topN}</span>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Min Score</label>
             <input type="range" min={0} max={100} value={threshold}
@@ -99,10 +151,10 @@ export default function CandidatesPage() {
         <div className="grid grid-cols-[2rem_1fr_7rem_7rem_7rem_7rem_6rem] gap-x-3 px-5 py-3 border-b border-zinc-100 bg-zinc-50">
           <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">#</div>
           <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Candidate</div>
-          <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide text-center">Final</div>
-          <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide text-center">Skill</div>
-          <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide text-center">RAG</div>
-          <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide text-center">HR</div>
+          <SortHeader label="Final"  col="final" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
+          <SortHeader label="Skill"  col="skill" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
+          <SortHeader label="RAG"    col="rag"   sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
+          <SortHeader label="HR"     col="hr"    sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />
           <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide text-center">Status</div>
         </div>
 
@@ -134,6 +186,22 @@ export default function CandidatesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function SortHeader({ label, col, sortCol, sortDir, onSort }: {
+  label: string; col: SortCol; sortCol: SortCol; sortDir: "desc" | "asc"; onSort: (c: SortCol) => void
+}) {
+  const active = sortCol === col
+  return (
+    <button onClick={() => onSort(col)}
+      className="flex items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors hover:text-zinc-600 group"
+      style={{ color: active ? "#4f46e5" : undefined }}>
+      {label}
+      {active
+        ? (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)
+        : <ChevronsUpDown className="w-3 h-3 opacity-30 group-hover:opacity-60" />}
+    </button>
   )
 }
 
@@ -245,7 +313,7 @@ function CandidateRow({ ranked: r, rank, expanded, onToggle }: {
             <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col gap-3">
               <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Quick Actions</div>
               <Link
-                href="/evaluation"
+                href={`/evaluation?candidate=${encodeURIComponent(c.filename)}`}
                 className="flex items-center justify-between px-3 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
               >
                 <span>HR Evaluation</span>

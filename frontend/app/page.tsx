@@ -47,31 +47,10 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard
-          label="Total Candidates"
-          value={loading ? "—" : totalCandidates}
-          icon={Users}
-          iconColor="text-blue-600"
-        />
-        <MetricCard
-          label="Ranked"
-          value={loading ? "—" : ranked.length}
-          icon={Briefcase}
-          iconColor="text-indigo-600"
-        />
-        <MetricCard
-          label="Shortlisted"
-          value={loading ? "—" : shortlisted}
-          sub={ranked.length ? `of ${ranked.length}` : undefined}
-          icon={CheckCircle2}
-          iconColor="text-emerald-600"
-        />
-        <MetricCard
-          label="Avg. Match Score"
-          value={loading ? "—" : `${avgScore}%`}
-          icon={TrendingUp}
-          iconColor="text-amber-600"
-        />
+        <MetricCard label="Total Candidates" value={totalCandidates} icon={Users} iconColor="text-blue-600" loading={loading} />
+        <MetricCard label="Ranked" value={ranked.length} icon={Briefcase} iconColor="text-indigo-600" loading={loading} />
+        <MetricCard label="Shortlisted" value={shortlisted} sub={ranked.length ? `of ${ranked.length}` : undefined} icon={CheckCircle2} iconColor="text-emerald-600" loading={loading} />
+        <MetricCard label="Avg. Match Score" value={`${avgScore}%`} icon={TrendingUp} iconColor="text-amber-600" loading={loading} />
       </div>
 
       {ranked.length === 0 && !loading ? (

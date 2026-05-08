@@ -8,9 +8,10 @@ interface MetricCardProps {
   icon: LucideIcon
   iconColor?: string
   trend?: { value: string; positive: boolean }
+  loading?: boolean
 }
 
-export function MetricCard({ label, value, sub, icon: Icon, iconColor = "text-indigo-600", trend }: MetricCardProps) {
+export function MetricCard({ label, value, sub, icon: Icon, iconColor = "text-indigo-600", trend, loading }: MetricCardProps) {
   return (
     <div className="bg-white border border-zinc-200 rounded-xl p-5 flex flex-col gap-3 hover:border-zinc-300 transition-colors">
       <div className="flex items-center justify-between">
@@ -20,10 +21,16 @@ export function MetricCard({ label, value, sub, icon: Icon, iconColor = "text-in
         </div>
       </div>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-semibold text-zinc-900 tabular-nums">{value}</span>
-        {sub && <span className="text-sm text-zinc-400 mb-0.5">{sub}</span>}
+        {loading ? (
+          <div className="h-8 w-16 rounded-lg bg-zinc-100 animate-pulse" />
+        ) : (
+          <>
+            <span className="text-2xl font-semibold text-zinc-900 tabular-nums">{value}</span>
+            {sub && <span className="text-sm text-zinc-400 mb-0.5">{sub}</span>}
+          </>
+        )}
       </div>
-      {trend && (
+      {trend && !loading && (
         <div className={cn("flex items-center gap-1 text-xs font-medium", trend.positive ? "text-emerald-600" : "text-red-500")}>
           <span>{trend.positive ? "↑" : "↓"}</span>
           <span>{trend.value}</span>

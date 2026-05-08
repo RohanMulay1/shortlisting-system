@@ -244,6 +244,14 @@ async def api_generate_qualifier(req: QualifierRequest):
     return {"questions": questions}
 
 
+@app.delete("/api/qualifier/questions/{candidate_filename:path}")
+async def api_delete_qualifier_cache(candidate_filename: str):
+    cache = state.load("qualifier_questions", {})
+    cache.pop(candidate_filename, None)
+    state.save("qualifier_questions", cache)
+    return {"ok": True}
+
+
 @app.post("/api/qualifier/evaluate")
 async def api_evaluate_qualifier(req: QualifierEvaluateRequest):
     """Evaluate a candidate's interview answers against their qualifier questions.

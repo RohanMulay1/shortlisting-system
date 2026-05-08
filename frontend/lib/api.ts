@@ -169,6 +169,10 @@ export async function generateQualifier(candidate_filename: string): Promise<{ q
   })
 }
 
+export async function clearQualifierCache(candidate_filename: string): Promise<{ ok: boolean }> {
+  return request(`/api/qualifier/questions/${encodeURIComponent(candidate_filename)}`, { method: "DELETE" })
+}
+
 export interface QuestionResult {
   verdict: "Strong" | "Good" | "Weak" | "Not Addressed"
   summary: string

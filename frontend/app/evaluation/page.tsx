@@ -4,12 +4,12 @@ import { useState, useEffect } from "react"
 import { ScoreRing } from "@/components/shared/ScoreRing"
 import { scoreColor } from "@/lib/utils"
 import {
-  CheckCircle2, XCircle, ChevronLeft, ChevronRight,
-  MessageSquare, Sparkles, AlertCircle, Users, Mic, FileText, Video, LogOut, RefreshCw
+  CheckCircle2, XCircle, ChevronLeft,
+  MessageSquare, Sparkles, AlertCircle, Users, Mic, FileText, Video, LogOut, RefreshCw, RotateCcw
 } from "lucide-react"
 import Link from "next/link"
 import {
-  getRanked, generateQualifier, evaluateQualifier, submitEvaluation,
+  getRanked, generateQualifier, clearQualifierCache, evaluateQualifier, submitEvaluation,
   finalizePipeline, getMeetStatus, getMeetAuthUrl, getMeetMeetings,
   fetchMeetTranscript, disconnectMeet,
   type RankedCandidate, type QuestionResult, type MeetMeeting
@@ -47,6 +47,7 @@ export default function EvaluationPage() {
   const [decisions, setDecisions] = useState<Record<string, "shortlisted" | "rejected" | null>>({})
   const [saving, setSaving] = useState(false)
   const [saveDone, setSaveDone] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
 
   useEffect(() => {
     getRanked()
@@ -97,6 +98,16 @@ export default function EvaluationPage() {
       .finally(() => setLoadingQ(false))
   }, [selectedIdx, candidates]) // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  // Auto-select candidate from ?candidate= query param (deep-link from candidates page)
+  useEffect(() => {
+    if (candidates.length === 0 || typeof window === "undefined") return
+    const target = new URLSearchParams(window.location.search).get("candidate")
+    if (!target) return
+    const idx = candidates.findIndex(c => c.candidate.filename === target)
+    if (idx >= 0) setSelectedIdx(idx)
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [candidates])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,6 +180,21 @@ export default function EvaluationPage() {
     }
   }
 
+  const handleRegenerate = async () => {
+    setRegenerating(true)
+    setError(null)
+    try {
+      await clearQualifierCache(fn)
+      setQuestions(prev => { const n = { ...prev }; delete n[fn]; return n })
+      const res = await generateQualifier(fn)
+      setQuestions(prev => ({ ...prev, [fn]: res.questions }))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Regeneration failed")
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   const handleConnectMeet = async () => {
     try {
       const { url } = await getMeetAuthUrl()
@@ -206,7 +232,13 @@ export default function EvaluationPage() {
   return (
     <div className="p-8 max-w-6xl mx-auto animate-in">
       <div className="mb-6">
-        <div className="text-xs text-zinc-400 font-medium mb-2">HR Evaluation</div>
+        <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium mb-2">
+          <Link href="/candidates" className="flex items-center gap-1 hover:text-zinc-600 transition-colors">
+            <ChevronLeft className="w-3 h-3" />Candidates
+          </Link>
+          <span>/</span>
+          <span>HR Evaluation</span>
+        </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">Qualifier Evaluation</h1>
@@ -476,10 +508,16 @@ export default function EvaluationPage() {
                 </span>
               )}
               {cResults && (
-                <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                   AI evaluated
                 </span>
               )}
+              <button onClick={handleRegenerate} disabled={regenerating || loadingQ}
+                className="ml-auto flex items-center gap-1 text-[11px] text-zinc-400 hover:text-indigo-600 transition-colors disabled:opacity-40"
+                title="Regenerate questions">
+                <RotateCcw className={`w-3 h-3 ${regenerating ? "animate-spin" : ""}`} />
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </button>
             </div>
 
             <div className="p-5 space-y-4">

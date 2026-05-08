@@ -25,7 +25,7 @@ export default function JobsPage() {
   const [parsing, setParsing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [running, setRunning] = useState(false)
-  const [pipelineStep, setPipelineStep] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -74,8 +74,8 @@ export default function JobsPage() {
       const added = res.count - prevCount
       const skipped = resumeFiles.length - added
       setUploadResult({ added: Math.max(added, 0), skipped: Math.max(skipped, 0), total: res.count })
-      // update existing filenames so subsequent uploads show correct duplicate state
       setExistingFilenames(res.candidates.map(c => c.filename))
+      localStorage.setItem("lastUpload", Date.now().toString())
       setResumeFiles([])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Upload failed")
@@ -87,13 +87,13 @@ export default function JobsPage() {
   const handleRunPipeline = async () => {
     setError(null)
     setRunning(true)
-    setPipelineStep(0)
-    const interval = setInterval(() => setPipelineStep(s => (s < 3 ? s + 1 : s)), 2000)
+    setElapsed(0)
+    const interval = setInterval(() => setElapsed(e => e + 1), 1000)
     try {
       await runPipeline({ top_n: 10 })
       clearInterval(interval)
-      setPipelineStep(4)
-      setTimeout(() => router.push("/candidates"), 500)
+      localStorage.setItem("lastPipelineRun", Date.now().toString())
+      router.push("/candidates")
     } catch (e: unknown) {
       clearInterval(interval)
       setError(e instanceof Error ? e.message : "Pipeline failed")
@@ -244,16 +244,10 @@ export default function JobsPage() {
           {canRun && (
             <div className="flex flex-col gap-2">
               {running ? (
-                <div className="w-full flex flex-col gap-3 py-3 px-4 rounded-xl bg-indigo-50 border border-indigo-100">
-                  <div className="flex items-center gap-3">
-                    <Spinner className="text-indigo-600" />
-                    <span className="text-sm font-semibold text-indigo-900">
-                      {["Analyzing Resumes...", "Extracting Skills...", "Computing Semantic Matches...", "Finalizing Ranks...", "Complete!"][pipelineStep]}
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full bg-indigo-200/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-600 transition-all duration-500 ease-out" style={{ width: `${(pipelineStep / 4) * 100}%` }} />
-                  </div>
+                <div className="w-full flex items-center gap-3 py-3 px-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                  <Spinner className="text-indigo-600 shrink-0" />
+                  <span className="text-sm font-semibold text-indigo-900 flex-1">Scoring &amp; ranking candidates...</span>
+                  <span className="text-xs font-mono text-indigo-400 tabular-nums">{elapsed}s</span>
                 </div>
               ) : (
                 <button
