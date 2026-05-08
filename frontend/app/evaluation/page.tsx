@@ -97,6 +97,17 @@ export default function EvaluationPage() {
       .finally(() => setLoadingQ(false))
   }, [selectedIdx, candidates]) // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
+      if (e.key === "j") setSelectedIdx(prev => Math.min(prev + 1, candidates.length - 1))
+      else if (e.key === "k") setSelectedIdx(prev => Math.max(prev - 1, 0))
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [candidates.length])
+  
   if (!loading && candidates.length === 0) {
     return (
       <div className="p-8 max-w-6xl mx-auto animate-in">
@@ -217,31 +228,50 @@ export default function EvaluationPage() {
         </div>
       )}
 
-      {/* Candidate tabs */}
-      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
-        {candidates.map((rc, i) => {
-          const dec = decisions[rc.candidate.filename]
-          return (
-            <button key={rc.candidate.filename} onClick={() => setSelectedIdx(i)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all shrink-0 ${
-                selectedIdx === i ? "bg-indigo-600 border-indigo-600 text-white"
-                : dec === "shortlisted" ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                : dec === "rejected"   ? "bg-red-50 border-red-200 text-red-600"
-                : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-              }`}
-            >
-              <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold">{i + 1}</span>
-              <span className="max-w-[100px] truncate">{rc.candidate.name.split(" ")[0]}</span>
-              {dec === "shortlisted" && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-              {dec === "rejected"    && <XCircle      className="w-3.5 h-3.5 shrink-0" />}
-            </button>
-          )
-        })}
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* MASTER LIST (Sidebar) */}
+        <div className="lg:col-span-3 bg-white border border-zinc-200 rounded-xl overflow-hidden sticky top-8">
+          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Candidates</h2>
+            <div className="text-[10px] text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200 font-mono shadow-sm">J / K</div>
+          </div>
+          <div className="max-h-[calc(100vh-200px)] overflow-y-auto p-2 space-y-1">
+            {candidates.map((rc, i) => {
+              const dec = decisions[rc.candidate.filename]
+              const isSelected = selectedIdx === i
+              return (
+                <button
+                  key={rc.candidate.filename}
+                  onClick={() => setSelectedIdx(i)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+                    isSelected ? "bg-indigo-50 border border-indigo-100 shadow-sm"
+                    : dec === "shortlisted" ? "hover:bg-emerald-50 border border-transparent"
+                    : dec === "rejected" ? "hover:bg-red-50 border border-transparent"
+                    : "hover:bg-zinc-50 border border-transparent"
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                    isSelected ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-500"
+                  }`}>
+                    <span className="text-[10px] font-bold">{i + 1}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium truncate ${isSelected ? "text-indigo-900" : "text-zinc-700"}`}>
+                      {rc.candidate.name}
+                    </div>
+                    {dec === "shortlisted" && <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5"><CheckCircle2 className="w-3 h-3"/> Shortlisted</span>}
+                    {dec === "rejected" && <span className="text-[10px] font-semibold text-red-600 flex items-center gap-1 mt-0.5"><XCircle className="w-3 h-3"/> Rejected</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* LEFT */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
+        {/* DETAIL VIEW */}
+        <div className="lg:col-span-9 grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {/* LEFT (Profile & Scores) */}
+          <div className="flex flex-col gap-4">
           {/* Profile */}
           <div className="bg-white border border-zinc-200 rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
@@ -310,8 +340,8 @@ export default function EvaluationPage() {
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div className="lg:col-span-3 flex flex-col gap-4">
+        {/* RIGHT (Interview & AI) */}
+        <div className="flex flex-col gap-4">
 
           {/* Interview Recording — Google Meet */}
           <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
@@ -544,17 +574,6 @@ export default function EvaluationPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <button disabled={selectedIdx === 0} onClick={() => setSelectedIdx(i => i - 1)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              <ChevronLeft className="w-4 h-4" />Previous
-            </button>
-            <span className="text-xs text-zinc-400">{selectedIdx + 1} / {candidates.length}</span>
-            <button disabled={selectedIdx === candidates.length - 1} onClick={() => setSelectedIdx(i => i + 1)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              Next<ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </div>
     </div>

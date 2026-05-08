@@ -25,6 +25,7 @@ export default function JobsPage() {
   const [parsing, setParsing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [running, setRunning] = useState(false)
+  const [pipelineStep, setPipelineStep] = useState(0)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,10 +87,15 @@ export default function JobsPage() {
   const handleRunPipeline = async () => {
     setError(null)
     setRunning(true)
+    setPipelineStep(0)
+    const interval = setInterval(() => setPipelineStep(s => (s < 3 ? s + 1 : s)), 2000)
     try {
       await runPipeline({ top_n: 10 })
-      router.push("/candidates")
+      clearInterval(interval)
+      setPipelineStep(4)
+      setTimeout(() => router.push("/candidates"), 500)
     } catch (e: unknown) {
+      clearInterval(interval)
       setError(e instanceof Error ? e.message : "Pipeline failed")
       setRunning(false)
     }
@@ -237,21 +243,26 @@ export default function JobsPage() {
           {/* Run Pipeline */}
           {canRun && (
             <div className="flex flex-col gap-2">
-              <button
-                onClick={handleRunPipeline}
-                disabled={running}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white disabled:opacity-70"
-              >
-                {running ? (
-                  <><Spinner />Running pipeline...</>
-                ) : (
-                  <><Play className="w-4 h-4" />Run Candidate Match & Rank</>
-                )}
-              </button>
-              {running && (
-                <p className="text-xs text-center text-zinc-400">
-                  Scoring resumes and computing matches — this takes 10–30 seconds
-                </p>
+              {running ? (
+                <div className="w-full flex flex-col gap-3 py-3 px-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                  <div className="flex items-center gap-3">
+                    <Spinner className="text-indigo-600" />
+                    <span className="text-sm font-semibold text-indigo-900">
+                      {["Analyzing Resumes...", "Extracting Skills...", "Computing Semantic Matches...", "Finalizing Ranks...", "Complete!"][pipelineStep]}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-indigo-200/50 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-600 transition-all duration-500 ease-out" style={{ width: `${(pipelineStep / 4) * 100}%` }} />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleRunPipeline}
+                  disabled={running}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all shadow-sm bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white disabled:opacity-70"
+                >
+                  <Play className="w-4 h-4" />Run Candidate Match & Rank
+                </button>
               )}
             </div>
           )}
@@ -359,9 +370,9 @@ export default function JobsPage() {
   )
 }
 
-function Spinner() {
+function Spinner({ className }: { className?: string }) {
   return (
-    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+    <svg className={`animate-spin w-4 h-4 ${className || ""}`} viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>

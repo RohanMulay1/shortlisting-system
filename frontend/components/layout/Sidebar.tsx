@@ -45,9 +45,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[224px] bg-zinc-950 flex flex-col z-40 border-r border-zinc-800">
+    <aside className="fixed left-0 top-0 h-screen w-[224px] bg-zinc-950/80 backdrop-blur-xl flex flex-col z-40 border-r border-white/5">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-zinc-800/60">
+      <div className="px-4 py-5 border-b border-white/5">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
             <Zap className="w-4 h-4 text-white" />
@@ -60,7 +60,7 @@ export function Sidebar() {
       </div>
 
       {/* Active job pill */}
-      <div className="px-3 py-3 border-b border-zinc-800/60">
+      <div className="px-3 py-3 border-b border-white/5">
         {jdTitle ? (
           <div className="flex items-center gap-1.5">
             <Link
@@ -120,7 +120,7 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 pb-4 space-y-0.5 border-t border-zinc-800/60 pt-3">
+      <div className="px-3 pb-4 space-y-0.5 border-t border-white/5 pt-3">
         {BOTTOM_NAV.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
