@@ -574,8 +574,9 @@ export default function EvaluationPage() {
             </div>
           </div>
 
-        </div>
-      </div>
+        </div>{/* end RIGHT */}
+        </div>{/* end lg:col-span-9 */}
+      </div>{/* end 12-col grid */}
     </div>
   )
 }
