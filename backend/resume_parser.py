@@ -22,8 +22,10 @@ _PARSE_SYSTEM = """You are an expert resume parser. Extract structured informati
   "summary": "Two-sentence summary of candidate profile"
 }
 Rules:
-- total_years: total professional experience in years (float)
-- skill_experience: estimated years of experience per skill (integer or float)
+- total_years: SUM the duration of ALL roles (full-time, part-time, internships). Add each role's months, convert to years (float rounded to 1 decimal). Never report only the most recent role. Example: if someone has 3 roles of 6 months each, total_years = 1.5.
+- For "Present" end dates, use the current date to calculate duration.
+- Include ALL companies where the candidate worked, even short internships.
+- skill_experience: estimated years using that skill across all roles (integer or float)
 - If information is missing, use empty string/list/dict or 0
 - Return ONLY the JSON object, no markdown, no explanation
 """
