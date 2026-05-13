@@ -271,10 +271,15 @@ function CandidateRow({ ranked: r, rank, expanded, onToggle }: {
                   <ScoreBar label="HR Eval" value={hrPct} weight="×0.2" compact />
                 </div>
               </div>
-              <div className="border-t border-zinc-100 pt-3 space-y-1">
-                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">Experience</div>
-                <div className="text-sm text-zinc-600">{c.total_years} years total</div>
-                <div className="text-xs text-zinc-400">{c.education}</div>
+              <div className="border-t border-zinc-100 pt-3 space-y-3">
+                <div>
+                  <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Experience</div>
+                  <div className="text-sm text-zinc-600">{c.total_years} years total</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-1">Education</div>
+                  <div className="text-xs text-zinc-400 leading-relaxed">{c.education}</div>
+                </div>
               </div>
             </div>
 
