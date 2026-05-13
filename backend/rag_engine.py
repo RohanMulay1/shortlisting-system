@@ -37,28 +37,46 @@ def _index():
 
 def _candidate_to_text(candidate: dict) -> str:
     parts = []
+    if candidate.get("name"):
+        parts.append(f"Candidate: {candidate['name']}")
     if candidate.get("summary"):
-        parts.append(candidate["summary"])
+        parts.append(f"Profile Summary: {candidate['summary']}")
     if candidate.get("skills"):
-        parts.append("Skills: " + ", ".join(candidate["skills"]))
-    for proj in candidate.get("projects", [])[:3]:
-        parts.append(proj.get("description", ""))
+        parts.append("Key Skills and Expertise: " + ", ".join(candidate["skills"]))
+    
+    # Include all projects
+    for proj in candidate.get("projects", []):
+        parts.append(f"Project '{proj.get('name')}': {proj.get('description')}")
+    
     if candidate.get("companies"):
-        parts.append("Experience at: " + ", ".join(candidate["companies"]))
-    return " | ".join(filter(None, parts)) or candidate.get("raw_text", "")[:500]
+        parts.append("Work History at: " + ", ".join(candidate["companies"]))
+    
+    if candidate.get("education"):
+        parts.append(f"Education: {candidate['education']}")
+
+    # Crucial: include a chunk of raw text for deep semantic context
+    if candidate.get("raw_text"):
+        parts.append(f"Full Resume Context: {candidate['raw_text'][:2000]}")
+    
+    return "\n".join(filter(None, parts))
 
 
 def _jd_to_text(jd: dict) -> str:
     parts = []
     if jd.get("title"):
-        parts.append(jd["title"])
+        parts.append(f"Job Role: {jd['title']}")
     if jd.get("required_skills"):
-        parts.append("Required: " + ", ".join(jd["required_skills"]))
+        parts.append("Core Required Skills: " + ", ".join(jd["required_skills"]))
     if jd.get("preferred_skills"):
-        parts.append("Preferred: " + ", ".join(jd["preferred_skills"]))
+        parts.append("Preferred/Bonus Skills: " + ", ".join(jd["preferred_skills"]))
+    if jd.get("experience_years"):
+        parts.append(f"Experience Required: {jd['experience_years']}+ years")
     if jd.get("responsibilities"):
-        parts.extend(jd["responsibilities"][:3])
-    return " | ".join(filter(None, parts))
+        parts.append("Key Responsibilities: " + " ".join(jd["responsibilities"]))
+    
+    # If we had the raw JD text, we would include it here. 
+    # For now, we use the parsed fields to construct a descriptive prompt.
+    return "\n".join(filter(None, parts))
 
 
 def _cosine_fallback(jd_vec: list, cand_vecs: list) -> list[float]:
