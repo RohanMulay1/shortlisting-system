@@ -26,6 +26,7 @@ Rules:
 - For "Present" end dates, use the current date to calculate duration.
 - companies: Include ALL companies where the candidate worked. NEVER include universities, colleges, or schools in this list — those belong in 'education'.
 - education: Summary of degrees and institutions.
+- skills: Scan the ENTIRE resume (Experience, Projects, and Technical Skills sections). Extract both explicit skills and implicit ones demonstrated in descriptions (e.g., if they "defined data and validation pipeline", include "Data Preprocessing"). Ensure common AI/ML terminology is captured (e.g. ML, Deep Learning, etc.).
 - skill_experience: estimated years using that skill across all roles (integer or float)
 - If information is missing, use empty string/list/dict or 0
 - Return ONLY the JSON object, no markdown, no explanation

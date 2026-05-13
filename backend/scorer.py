@@ -16,19 +16,38 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
     # Component 1: Skill Match (fraction of required skills found)
     if required:
         matched_required = []
+        # Common synonyms/aliases to handle variations
+        synonyms = {
+            "machine learning": ["ml", "machine-learning"],
+            "deep learning": ["dl", "deep-learning", "neural networks", "cnn", "rnn", "lstm"],
+            "data preprocessing": ["data cleaning", "data preparation", "data processing", "feature scaling", "normalization"],
+            "feature engineering": ["feature extraction", "feature selection", "dimensionality reduction"],
+            "natural language processing": ["nlp", "text mining", "large language models", "llm"],
+            "computer vision": ["cv", "image processing", "object detection", "perception"],
+        }
+        
         for s in required:
-            # Flexible match: exact substring OR high word-set overlap
             found = False
             s_words = set(s.split())
+            aliases = synonyms.get(s, [])
+            
             for cs in candidate_skills:
+                # 1. Exact or substring match
                 if s in cs or cs in s:
                     found = True
                     break
-                # Word-set overlap for multi-word skills (e.g. "data preprocessing" matching "processing data")
+                
+                # 2. Alias match
+                if any(alias in cs or cs in alias for alias in aliases):
+                    found = True
+                    break
+                
+                # 3. Word-set overlap for multi-word skills
                 cs_words = set(cs.split())
                 if len(s_words) > 1 and len(s_words & cs_words) / len(s_words) >= 0.6:
                     found = True
                     break
+            
             if found:
                 matched_required.append(s)
         
@@ -37,7 +56,22 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
         matched_required = []
         skill_match_ratio = 1.0
 
-    # ... (rest of function)
+    # Component 2: Skill Experience (avg years on matched skills, normalized)
+    if matched_required:
+        exp_values = []
+        for skill in matched_required:
+            best = 0.0
+            for k, v in skill_exp.items():
+                if skill in k or k in skill:
+                    best = max(best, float(v))
+            exp_values.append(best)
+        avg_skill_exp = sum(exp_values) / len(exp_values)
+        skill_exp_score = min(avg_skill_exp / max(jd_exp_years, 1), 1.0)
+    else:
+        skill_exp_score = 0.0
+
+    # Component 3: Total Experience (normalized against JD requirement)
+    total_exp_score = min(candidate_exp / jd_exp_years, 1.0)
 
     # Component 4: Bonus (preferred skills match)
     if preferred:
@@ -45,8 +79,13 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
         for s in preferred:
             found = False
             s_words = set(s.split())
+            aliases = synonyms.get(s, [])
+            
             for cs in candidate_skills:
                 if s in cs or cs in s:
+                    found = True
+                    break
+                if any(alias in cs or cs in alias for alias in aliases):
                     found = True
                     break
                 cs_words = set(cs.split())
