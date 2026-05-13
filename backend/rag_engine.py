@@ -95,6 +95,11 @@ def compute_rag_scores(jd: dict, candidates: list[dict]) -> list[float]:
 
     jd_text = _jd_to_text(jd)
     candidate_texts = [_candidate_to_text(c) for c in candidates]
+    
+    # DEBUG
+    print(f"[DEBUG] RAG JD TEXT: {jd_text[:200]}...")
+    if candidate_texts:
+        print(f"[DEBUG] RAG CAND 1 TEXT: {candidate_texts[0][:200]}...")
 
     all_embeddings = embed([jd_text] + candidate_texts)
     jd_vec = all_embeddings[0]

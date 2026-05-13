@@ -18,27 +18,33 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
         matched_required = []
         # Common synonyms/aliases to handle variations
         synonyms = {
-            "machine learning": ["ml", "machine-learning"],
-            "deep learning": ["dl", "deep-learning", "neural networks", "cnn", "rnn", "lstm"],
-            "data preprocessing": ["data cleaning", "data preparation", "data processing", "feature scaling", "normalization"],
-            "feature engineering": ["feature extraction", "feature selection", "dimensionality reduction"],
+            "machine learning": ["ml", "machine-learning", "adas", "autonomous", "perception", "inference"],
+            "deep learning": ["dl", "deep-learning", "neural networks", "cnn", "rnn", "lstm", "pytorch", "tensorflow", "tensorrt"],
+            "data preprocessing": ["data cleaning", "data preparation", "data processing", "feature scaling", "normalization", "pipeline", "augmentation"],
+            "feature engineering": ["feature extraction", "feature selection", "dimensionality reduction", "optimization"],
             "natural language processing": ["nlp", "text mining", "large language models", "llm"],
-            "computer vision": ["cv", "image processing", "object detection", "perception"],
+            "computer vision": ["cv", "image processing", "object detection", "perception", "opencv"],
         }
         
+        def slug(text):
+            return text.lower().replace("-", "").replace(" ", "").replace("_", "")
+
         for s in required:
             found = False
             s_words = set(s.split())
-            aliases = synonyms.get(s, [])
+            s_slug = slug(s)
+            aliases = synonyms.get(s.lower(), [])
+            alias_slugs = [slug(a) for a in aliases]
             
             for cs in candidate_skills:
-                # 1. Exact or substring match
-                if s in cs or cs in s:
+                cs_slug = slug(cs)
+                # 1. Exact/Substring or Slug match
+                if s_slug in cs_slug or cs_slug in s_slug:
                     found = True
                     break
                 
-                # 2. Alias match
-                if any(alias in cs or cs in alias for alias in aliases):
+                # 2. Alias match (exact or slug)
+                if any(slug(alias) in cs_slug or cs_slug in slug(alias) for alias in aliases):
                     found = True
                     break
                 
@@ -79,13 +85,15 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
         for s in preferred:
             found = False
             s_words = set(s.split())
-            aliases = synonyms.get(s, [])
-            
+            s_slug = slug(s)
+            aliases = synonyms.get(s.lower(), [])
+
             for cs in candidate_skills:
-                if s in cs or cs in s:
+                cs_slug = slug(cs)
+                if s_slug in cs_slug or cs_slug in s_slug:
                     found = True
                     break
-                if any(alias in cs or cs in alias for alias in aliases):
+                if any(slug(alias) in cs_slug or cs_slug in slug(alias) for alias in aliases):
                     found = True
                     break
                 cs_words = set(cs.split())
@@ -94,11 +102,12 @@ def compute_skill_score(jd: dict, candidate: dict, weights: dict = None) -> dict
                     break
             if found:
                 matched_preferred.append(s)
-        
+
         bonus_score = len(matched_preferred) / len(preferred)
     else:
         matched_preferred = []
         bonus_score = 0.0
+
 
     final = (
         skill_match_ratio * weights["skill_match"] +
