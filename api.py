@@ -140,7 +140,18 @@ async def api_run_pipeline(req: PipelineRunRequest):
         raise HTTPException(status_code=400, detail="No resumes uploaded")
 
     weights = req.weights or {"skill_match": 0.5, "skill_exp": 0.3, "total_exp": 0.15, "bonus": 0.05}
-    skill_scores = [compute_skill_score(jd, c, weights) for c in candidates]
+    
+    # 1. Batch semantic match via LLM
+    from backend.scorer import batch_semantic_skill_match, compute_skill_score
+    semantic_matches = batch_semantic_skill_match(jd, candidates)
+    
+    # 2. Compute individual skill scores
+    skill_scores = []
+    for c in candidates:
+        matches = semantic_matches.get(c["filename"], {"matched_required": [], "matched_preferred": []})
+        score = compute_skill_score(jd, c, matches["matched_required"], matches["matched_preferred"], weights)
+        skill_scores.append(score)
+        
     rag_scores = compute_rag_scores(jd, candidates)
 
     hr_scores_map = state.load("hr_evaluations", {})
